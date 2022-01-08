@@ -1,11 +1,12 @@
 use rand::Rng;
 
+#[derive(Debug)]
 pub enum Player {
     One,
     Two,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct MancalaBoard {
     wells: [Well; 14],
 }
@@ -28,34 +29,93 @@ impl MancalaBoard {
         return new_board;
     }
 
-    pub fn move_well(&mut self, well: usize, player: Player) -> bool {
-        dbg!(well);
+    pub fn get_best_move(&self, player: Player) -> (usize, f32) {
+        match player {
+            Player::One => {
+                let mut best_move: usize = 0;
+                let mut best_score: f32 = f32::MIN;
+                println!("Player {:#?}", player);
+                for i in 0..6 {
+                    if self.wells[i].stones == 0 {
+                        continue;
+                    }
+                    let mut test_board = self.clone();
+                    let go_again = test_board.move_well(i, &player);
+                    let mut score = test_board.grade_board(&player);
+                    if go_again {
+                        score = score + 5.0; 
+                    }
+                    println!("\t{} - {}", i, score);
+                     if score > best_score {
+                        best_score = score;
+                        best_move = i;
+                   }
+                }
+                return (best_move, best_score);
+            }
+            Player::Two => {
+                let mut best_move: usize = 0;
+                let mut best_score: f32 = f32::MIN;
+                println!("{:#?}", player);
+                for i in 7..13 {
+                    if self.wells[i].stones == 0 {
+                        continue;
+                    }
+                    let mut test_board = self.clone();
+                    let go_again = test_board.move_well(i, &player);
+                    let mut score = test_board.grade_board(&player);
+                    if go_again {
+                        score = score + 1.0; 
+                    }
+                    println!("\t{} - {}", i, score);
+                    if score > best_score {
+                        best_score = score;
+                        best_move = i;
+                    }
+                }
+                return (best_move, best_score);
+            }
+        }
+    }
 
+    pub fn grade_board(&self, player: &Player) -> f32 {
+        let current_score = self.get_score();
+        let diff_score: i32;
+
+        match player {
+            Player::One => diff_score = current_score.0 - current_score.1,
+            Player::Two => diff_score = current_score.1 - current_score.0
+        }
+
+
+
+        //Shadow for math
+        let diff_score = diff_score as f32;
+
+
+        return diff_score;
+    }
+
+    pub fn move_well(&mut self, well: usize, player: &Player) -> bool {
         //If the provided well is empty, just let the player go again
         if self.wells[well].stones == 0 {
-            return true;
+            return false;
         }
 
         //'pick up' the stones to start moving them
         let mut total_stones = self.wells[well].stones;
-
-        dbg!(total_stones);
 
         //In doing so, empty the current well
         self.wells[well].stones = 0;
 
         //Start moving through the wells
         let mut current_well = self.wells[well].adjacent_well as usize;
-        dbg!(current_well);
 
         //Iterate over and over on the board, dropping stones one by one.
         while total_stones > 0 {
             self.wells[current_well].stones = self.wells[current_well].stones + 1;
-            dbg!(self.wells[current_well].stones);
             total_stones = total_stones - 1;
-            dbg!(total_stones);
             current_well = self.wells[current_well].adjacent_well as usize;
-            dbg!(current_well);
         }
 
         //When we're done, we technically have a reference here to the NEXT well, so we back that
@@ -67,12 +127,11 @@ impl MancalaBoard {
         } else {
             current_well = 13;
         }
-        dbg!(current_well);
 
         if current_well != 13 && current_well != 6 {
             if self.wells[current_well].stones == 1
                 && self.wells[MancalaBoard::reflective_index(current_well)].stones != 0
-                && MancalaBoard::ended_on_opponents_side(&player, current_well)
+                && !MancalaBoard::ended_on_opponents_side(&player, current_well)
             {
                 self.move_well_to_score(&player, current_well);
                 self.move_well_to_score(&player, MancalaBoard::reflective_index(current_well));
@@ -99,7 +158,7 @@ impl MancalaBoard {
         return (12 - ind) as usize;
     }
 
-    fn go_again(player: Player, well: usize) -> bool {
+    fn go_again(player: &Player, well: usize) -> bool {
         match player {
             Player::One => return well == 6,
             Player::Two => return well == 13,
@@ -148,7 +207,7 @@ impl MancalaBoard {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Well {
     stones: i32,
     adjacent_well: i32,
@@ -166,8 +225,13 @@ impl Well {
 fn main() {
     let mut board = MancalaBoard::new();
     while !board.game_over() {
-        while board.move_well(rand::thread_rng().gen_range(0..6), Player::One) {}
-        while board.move_well(rand::thread_rng().gen_range(7..13), Player::Two) {}
+        let mut best_move = board.get_best_move(Player::One);
+        println!("Chose {} - {}\n\n", best_move.0, best_move.1);
+
+        while board.move_well(best_move.0, &Player::One) {
+            best_move = board.get_best_move(Player::One)
+        }
+        while board.move_well(rand::thread_rng().gen_range(7..13), &Player::Two) {}
     }
 
     println!("{:#?}", board);
