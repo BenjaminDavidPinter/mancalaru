@@ -36,30 +36,22 @@ impl MancalaBoard {
     pub fn get_best_move(&self, player: Player, max_depth: i32) -> (usize, f32) {
         let min_iter: i32;
         let max_iter: i32;
-        let min_iter_against: i32;
-        let max_iter_against: i32;
         let other_player: Player;
         match player {
             Player::One => {
                 min_iter = 0;
                 max_iter = 6;
-                min_iter_against = 7;
-                max_iter_against = 13;
                 other_player = Player::Two;
             }
             Player::Two => {
                 min_iter = 7;
                 max_iter = 13;
-                min_iter_against = 0;
-                max_iter_against = 6;
                 other_player = Player::One;
             }
         }
 
         let mut best_move: usize = min_iter as usize;
         let mut best_score: f32 = f32::MIN;
-
-        let mut best_score_against: f32 = f32::MIN;
 
         for i in min_iter..max_iter {
             let i = i as usize;
@@ -72,32 +64,9 @@ impl MancalaBoard {
 
             if go_again && max_depth < MAX_DEPTH {
                 score += test_board.get_best_move(player.clone(), max_depth + 1).1;
-            } else if go_again {
-                score += score;
+            } else if max_depth < MAX_DEPTH {
+                score -= test_board.get_best_move(other_player.clone(), max_depth+1).1;
             } 
-
-            for j in min_iter_against as usize..max_iter_against as usize {
-                if test_board.wells[j].stones == 0 {
-                    continue;
-                }
-
-                let mut internal_test_board = test_board.clone();
-                let go_again_against = internal_test_board.move_well(j, &other_player.clone());
-                let mut score_against = internal_test_board.grade_board(&other_player);
-                if go_again_against && max_depth < MAX_DEPTH {
-                    score_against += internal_test_board
-                        .get_best_move(other_player.clone(), max_depth + 1)
-                        .1;
-                } else if go_again_against {
-                    score_against += score_against;
-                }
-
-                if score_against > best_score_against {
-                    best_score_against = score_against;
-                }
-            }
-
-            score -= best_score_against;
 
             if score > best_score {
                 best_score = score;
@@ -195,9 +164,6 @@ impl MancalaBoard {
     }
 
     fn reflective_index(ind: usize) -> usize {
-        if ind > 12 {
-            return 0_usize;
-        }
 
         (12 - ind) as usize
     }
@@ -280,13 +246,15 @@ fn main() {
         let mut player_move = String::new();
         println!("Enter a move:");
         io::stdin().read_line(&mut player_move).expect("Failed to read number");
-        let player_move: usize = player_move.trim().parse().expect("That isn't a number");
+        let mut player_move: usize = player_move.trim().parse().expect("That isn't a number");
         while board.move_well(player_move, &Player::Two) {
             println!("Go again:");
-            let mut player_move = String::new();
-            io::stdin().read_line(&mut player_move).expect("Failed to read number");
-            let player_move: usize = player_move.trim().parse().expect("That isn't a number");
+            let mut player_move_input = String::new();
+            io::stdin().read_line(&mut player_move_input).expect("Failed to read number");
+            player_move = player_move_input.trim().parse().expect("That isn't a number");
         }
+
+        println!("{:#?}", board);
     }
     println!("{:#?}", board.get_score());
 }
@@ -333,4 +301,16 @@ pub fn test_steal_p2() {
     assert!(test_board.wells[12].stones == 0);
     assert!(test_board.wells[0].stones == 0);
     assert!(test_board.wells[13].stones == 11);
+}
+
+#[test]
+pub fn test_wrap_around_steal() {
+    let mut test_board = MancalaBoard::new();
+    test_board.wells[5].stones = 8;
+    test_board.wells[0].stones = 0;
+    test_board.move_well(5, &Player::One);
+    assert!(test_board.wells[0].stones == 0);
+    assert!(test_board.wells[12].stones == 0);
+    dbg!(test_board.wells[6].stones);
+    assert!(test_board.wells[6].stones == 7);
 }
