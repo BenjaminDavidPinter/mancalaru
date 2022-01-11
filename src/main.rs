@@ -1,4 +1,8 @@
 use rand::Rng;
+use std::io;
+
+
+static MAX_DEPTH: i32 = 10;
 
 #[derive(Debug, Clone)]
 pub enum Player {
@@ -29,19 +33,25 @@ impl MancalaBoard {
         new_board
     }
 
-    pub fn get_best_move(&self, player: Player) -> (usize, f32) {
+    pub fn get_best_move(&self, player: Player, max_depth: i32) -> (usize, f32) {
         let min_iter: i32;
         let max_iter: i32;
+        let min_iter_against: i32;
+        let max_iter_against: i32;
         let other_player: Player;
         match player {
             Player::One => {
                 min_iter = 0;
                 max_iter = 6;
+                min_iter_against = 7;
+                max_iter_against = 13;
                 other_player = Player::Two;
             }
             Player::Two => {
                 min_iter = 7;
                 max_iter = 13;
+                min_iter_against = 0;
+                max_iter_against = 6;
                 other_player = Player::One;
             }
         }
@@ -51,7 +61,6 @@ impl MancalaBoard {
 
         let mut best_score_against: f32 = f32::MIN;
 
-        println!("Calculating best move for {:#?}", &player);
         for i in min_iter..max_iter {
             let i = i as usize;
             if self.wells[i].stones == 0 {
@@ -61,23 +70,28 @@ impl MancalaBoard {
             let go_again = test_board.move_well(i, &player.clone());
             let mut score = test_board.grade_board(&player);
 
-            if go_again {
-                println!("\t{}({} stones) - Can Move Again", i, self.wells[i].stones);
-                score += test_board.get_best_move(player.clone()).1;
-            }
+            if go_again && max_depth < MAX_DEPTH {
+                score += test_board.get_best_move(player.clone(), max_depth + 1).1;
+            } else if go_again {
+                score += score;
+            } 
 
-            for j in MancalaBoard::reflective_index(max_iter as usize) + 1
-                ..MancalaBoard::reflective_index(min_iter as usize) + 1
-            {
+            for j in min_iter_against as usize..max_iter_against as usize {
                 if test_board.wells[j].stones == 0 {
                     continue;
                 }
+
                 let mut internal_test_board = test_board.clone();
                 let go_again_against = internal_test_board.move_well(j, &other_player.clone());
                 let mut score_against = internal_test_board.grade_board(&other_player);
-                if go_again_against {
-                    score_against += internal_test_board.get_best_move(other_player.clone()).1;
+                if go_again_against && max_depth < MAX_DEPTH {
+                    score_against += internal_test_board
+                        .get_best_move(other_player.clone(), max_depth + 1)
+                        .1;
+                } else if go_again_against {
+                    score_against += score_against;
                 }
+
                 if score_against > best_score_against {
                     best_score_against = score_against;
                 }
@@ -85,13 +99,11 @@ impl MancalaBoard {
 
             score -= best_score_against;
 
-            println!("\t{}({} stones) - {}", i, self.wells[i].stones, score);
             if score > best_score {
                 best_score = score;
                 best_move = i;
             }
         }
-        println!();
         (best_move, best_score)
     }
 
@@ -159,12 +171,12 @@ impl MancalaBoard {
 
         if (current_well != 13 && current_well != 6)
             && self.wells[current_well].stones == 1
-            && self.wells[MancalaBoard::reflective_index(current_well)].stones != 0
-            && !MancalaBoard::ended_on_opponents_side(player, current_well)
-        {
-            self.move_well_to_score(player, current_well);
-            self.move_well_to_score(player, MancalaBoard::reflective_index(current_well));
-        }
+                && self.wells[MancalaBoard::reflective_index(current_well)].stones != 0
+                && !MancalaBoard::ended_on_opponents_side(player, current_well)
+                {
+                    self.move_well_to_score(player, current_well);
+                    self.move_well_to_score(player, MancalaBoard::reflective_index(current_well));
+                }
 
         MancalaBoard::go_again(player, current_well) && !self.game_over()
     }
@@ -206,11 +218,11 @@ impl MancalaBoard {
 
     pub fn game_over(&self) -> bool {
         (self.wells[0].stones == 0
-            && self.wells[1].stones == 0
-            && self.wells[2].stones == 0
-            && self.wells[3].stones == 0
-            && self.wells[4].stones == 0
-            && self.wells[5].stones == 0)
+         && self.wells[1].stones == 0
+         && self.wells[2].stones == 0
+         && self.wells[3].stones == 0
+         && self.wells[4].stones == 0
+         && self.wells[5].stones == 0)
             || (self.wells[7].stones == 0
                 && self.wells[8].stones == 0
                 && self.wells[9].stones == 0
@@ -222,20 +234,20 @@ impl MancalaBoard {
     pub fn get_score(&self) -> (i32, i32) {
         (
             self.wells[0].stones
-                + self.wells[1].stones
-                + self.wells[2].stones
-                + self.wells[3].stones
-                + self.wells[4].stones
-                + self.wells[5].stones
-                + self.wells[6].stones,
+            + self.wells[1].stones
+            + self.wells[2].stones
+            + self.wells[3].stones
+            + self.wells[4].stones
+            + self.wells[5].stones
+            + self.wells[6].stones,
             self.wells[7].stones
-                + self.wells[8].stones
-                + self.wells[9].stones
-                + self.wells[10].stones
-                + self.wells[11].stones
-                + self.wells[12].stones
-                + self.wells[13].stones,
-        )
+            + self.wells[8].stones
+            + self.wells[9].stones
+            + self.wells[10].stones
+            + self.wells[11].stones
+            + self.wells[12].stones
+            + self.wells[13].stones,
+            )
     }
 }
 
@@ -256,21 +268,24 @@ impl Well {
 
 fn main() {
     let mut board = MancalaBoard::new();
-    let mut scores = vec![(0, 0); 0];
-    let mut absolute_total_moves = 0;
 
     while !board.game_over() {
-        let mut best_move = board.get_best_move(Player::One);
-
-        let mut total_moves = 1;
+        let mut best_move = board.get_best_move(Player::One, 0);
+        println!("{:#?}", best_move);
         while board.move_well(best_move.0, &Player::One) {
-            total_moves += 1;
-            best_move = board.get_best_move(Player::One)
+            best_move = board.get_best_move(Player::One, 0);
+            println!("{:#?}", best_move);
         }
 
-        total_moves += 1;
-        while board.move_well(rand::thread_rng().gen_range(7..13), &Player::Two) {
-            total_moves += 1;
+        let mut player_move = String::new();
+        println!("Enter a move:");
+        io::stdin().read_line(&mut player_move).expect("Failed to read number");
+        let player_move: usize = player_move.trim().parse().expect("That isn't a number");
+        while board.move_well(player_move, &Player::Two) {
+            println!("Go again:");
+            let mut player_move = String::new();
+            io::stdin().read_line(&mut player_move).expect("Failed to read number");
+            let player_move: usize = player_move.trim().parse().expect("That isn't a number");
         }
     }
     println!("{:#?}", board.get_score());
@@ -281,6 +296,10 @@ pub fn test_go_again_p1() {
     let mut test_board = MancalaBoard::new();
     let go_again = test_board.move_well(2, &Player::One);
     assert!(go_again);
+
+    let mut test_board = MancalaBoard::new();
+    let go_again = test_board.move_well(0, &Player::One);
+    assert!(!go_again);
 }
 
 #[test]
