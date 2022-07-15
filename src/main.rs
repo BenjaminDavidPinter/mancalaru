@@ -58,8 +58,24 @@ impl MancalaBoard {
             if self.wells[i].stones == 0 {
                 continue;
             }
+
             let mut test_board = self.clone();
             let go_again = test_board.move_well(i, &player.clone());
+            if test_board.game_over() {
+                let final_score = test_board.get_score();
+                match player {
+                    Player::One => {
+                        if final_score.0 > final_score.1 {
+                            return (i, final_score.0 as f32 + 1000_f32);
+                        }
+                    },
+                    Player::Two => {
+                        if final_score.1 > final_score.0 {
+                            return (i, final_score.1 as f32 + 1000_f32);
+                        }
+                    }
+                }
+            }
             let mut score = test_board.grade_board(&player);
 
             if go_again && max_depth < MAX_DEPTH {
@@ -164,7 +180,6 @@ impl MancalaBoard {
     }
 
     fn reflective_index(ind: usize) -> usize {
-
         (12 - ind) as usize
     }
 
@@ -243,11 +258,20 @@ fn main() {
             println!("{:#?}", best_move);
         }
 
+        if board.game_over() {
+            break;
+        }
+
         let mut player_move = String::new();
         println!("Enter a move:");
         io::stdin().read_line(&mut player_move).expect("Failed to read number");
         let mut player_move: usize = player_move.trim().parse().expect("That isn't a number");
         while board.move_well(player_move, &Player::Two) {
+            
+            if board.game_over() {
+                break;
+            }
+
             println!("Go again:");
             let mut player_move_input = String::new();
             io::stdin().read_line(&mut player_move_input).expect("Failed to read number");
